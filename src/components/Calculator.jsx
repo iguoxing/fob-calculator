@@ -12,34 +12,29 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import InputField from './InputField';
-import ResultCard from './ResultCard';
 import { calculate, formatNumber, DEFAULT_VALUES } from '../utils/calculator';
 
 /**
  * 主计算器组件
- * 包含输入区域、结果展示区域和最终报价展示
+ * 右侧计算结果已隐藏，仅展示输入区域和最终FOB报价
  */
 function Calculator() {
   const [inputs, setInputs] = useState({ ...DEFAULT_VALUES });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
-  /** 更新单个输入值 */
   const handleInputChange = useCallback((field, value) => {
     setInputs((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  /** 计算结果（实时） */
   const results = useMemo(() => calculate(inputs), [inputs]);
 
-  /** 重置为默认值 */
   const handleReset = useCallback(() => {
     setInputs({ ...DEFAULT_VALUES });
     setSnackbarMsg('已重置为默认值');
     setSnackbarOpen(true);
   }, []);
 
-  /** 复制最终报价 */
   const handleCopyFOB = useCallback(() => {
     const text = `$${formatNumber(results.fobPrice)}`;
     navigator.clipboard
@@ -49,7 +44,6 @@ function Calculator() {
         setSnackbarOpen(true);
       })
       .catch(() => {
-        // 降级方案
         const textarea = document.createElement('textarea');
         textarea.value = text;
         document.body.appendChild(textarea);
@@ -66,7 +60,7 @@ function Calculator() {
   }, []);
 
   return (
-    <Box sx={{ width: '100%', maxWidth: 1200, mx: 'auto' }}>
+    <Box sx={{ width: '100%', maxWidth: 560, mx: 'auto' }}>
       <Paper
         elevation={8}
         sx={{
@@ -78,9 +72,9 @@ function Calculator() {
       >
         {/* 主体内容区域 */}
         <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
-          <Grid container spacing={{ xs: 2, sm: 3, md: 4 }}>
-            {/* 左栏：用户输入 */}
-            <Grid item xs={12} md={5}>
+          <Grid container>
+            {/* 输入区域（占满全宽） */}
+            <Grid item xs={12}>
               <Typography
                 variant="subtitle1"
                 sx={{
@@ -164,13 +158,7 @@ function Calculator() {
               />
 
               {/* 操作按钮 */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 1.5,
-                  mt: 2,
-                }}
-              >
+              <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
                 <Button
                   variant="outlined"
                   size="small"
@@ -190,91 +178,6 @@ function Calculator() {
                   重置默认值
                 </Button>
               </Box>
-            </Grid>
-
-            {/* 右栏：计算结果 */}
-            <Grid item xs={12} md={7}>
-              <Typography
-                variant="subtitle1"
-                sx={{
-                  fontWeight: 700,
-                  color: '#1a237e',
-                  mb: 2,
-                  pb: 1,
-                  borderBottom: '2px solid #e8eaf6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
-                <Box
-                  component="span"
-                  sx={{
-                    width: 4,
-                    height: 20,
-                    bgcolor: '#ff9800',
-                    borderRadius: 2,
-                    display: 'inline-block',
-                  }}
-                />
-                计算结果
-              </Typography>
-
-              <Grid container spacing={1.5}>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="优惠后报价"
-                    value={formatNumber(results.priceAfterDiscount)}
-                    currency="￥"
-                    formula="指导价 - 优惠价"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="可退税金额"
-                    value={formatNumber(results.taxRefund)}
-                    currency="￥"
-                    formula="优惠后报价 ÷ 1.13 × 0.13"
-                    color="#2e7d32"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="不含税车辆成本"
-                    value={formatNumber(results.costExclTax)}
-                    currency="￥"
-                    formula="优惠后报价 - 可退税金额"
-                    color="#c62828"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="改装费"
-                    value={formatNumber(results.modificationFee)}
-                    currency="￥"
-                    formula="优惠后报价 × 5% + 500"
-                    color="#6a1b9a"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="成本合计（人民币）"
-                    value={formatNumber(results.totalCostCNY)}
-                    currency="￥"
-                    formula="不含税成本 + 改装费 + 物流"
-                    color="#00695c"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <ResultCard
-                    label="成本折算（美元）"
-                    value={formatNumber(results.totalCostUSD)}
-                    currency="$"
-                    formula="成本合计 ÷ 汇率"
-                    color="#2e7d32"
-                  />
-                </Grid>
-              </Grid>
             </Grid>
           </Grid>
         </Box>
