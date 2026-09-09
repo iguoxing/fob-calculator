@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box } from '@mui/material';
 import Header from './components/Header';
 import Calculator from './components/Calculator';
 
 function App() {
+  const [mode, setMode] = useState('fob');
+
   return (
     <Box
       sx={{
@@ -13,7 +15,7 @@ function App() {
         flexDirection: 'column',
       }}
     >
-      <Header />
+      <Header mode={mode} />
       <Box
         sx={{
           flex: 1,
@@ -24,7 +26,7 @@ function App() {
           py: { xs: 2, md: 4 },
         }}
       >
-        <Calculator />
+        <Calculator mode={mode} onModeChange={setMode} />
       </Box>
     </Box>
   );

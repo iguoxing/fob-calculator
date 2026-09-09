@@ -11,6 +11,8 @@ export const DEFAULT_VALUES = {
   profit: 600,
   portCharge: 400,
   exchangeRate: 6.75,
+  oceanFreight: 1300,
+  insuranceRate: 0.4,
 };
 
 /** 增值税率 */
@@ -21,6 +23,9 @@ const CONSUMPTION_TAX_RATE = 0.05;
 
 /** 改装基础费 */
 const MODIFICATION_BASE_FEE = 500;
+
+/** CIF 保险加成率（国际惯例按 CIF 价加成 110% 投保） */
+const INSURANCE_LOADING = 1.1;
 
 /**
  * 执行FOB报价全链路计算
@@ -68,6 +73,34 @@ export function calculate(inputs) {
     totalCostCNY,
     totalCostUSD,
     fobPrice,
+  };
+}
+
+/**
+ * 在FOB基础上计算CIF报价
+ * CIF = FOB + 海运费 + 保险费
+ * 保险费 = CIF × 110% × 保险费率（需反解）
+ * => CIF = (FOB + 海运费) / (1 - 1.1 × 费率)
+ * @param {object} inputs - 用户输入值
+ * @param {number} inputs.oceanFreight - 海运费（$/台，起运港→目的港）
+ * @param {number} inputs.insuranceRate - 保险费率（%，默认0.4）
+ * @param {number} fobPrice - 已计算出的FOB报价（$）
+ * @returns {object} CIF计算结果
+ */
+export function calculateCIF(inputs, fobPrice) {
+  const freight = inputs.oceanFreight ?? 0;
+  const rate = (inputs.insuranceRate ?? 0.4) / 100;
+
+  const denominator = 1 - INSURANCE_LOADING * rate;
+  const base = fobPrice + freight;
+  const insurance =
+    denominator > 0 ? (base * INSURANCE_LOADING * rate) / denominator : 0;
+  const cifPrice = base + insurance;
+
+  return {
+    freight,
+    insurance,
+    cifPrice,
   };
 }
 

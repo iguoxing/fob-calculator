@@ -4,9 +4,12 @@ import DirectionsCarFilledIcon from '@mui/icons-material/DirectionsCarFilled';
 
 /**
  * 顶部标题组件
- * 显示品牌名称和工具标题
+ * 显示品牌名称和工具标题（标题随 FOB/CIF 模式切换）
+ * @param {object} props
+ * @param {'fob'|'cif'} props.mode - 当前报价模式
  */
-function Header() {
+function Header({ mode = 'fob' }) {
+  const isCif = mode === 'cif';
   return (
     <Box
       sx={{
@@ -43,7 +46,7 @@ function Header() {
             letterSpacing: '0.02em',
           }}
         >
-          FOB报价计算器
+          {isCif ? 'CIF报价计算器' : 'FOB报价计算器'}
         </Typography>
       </Box>
       <Typography
@@ -65,7 +68,9 @@ function Header() {
           fontSize: { xs: '0.75rem', md: '0.85rem' },
         }}
       >
-        专业汽车出口FOB报价 · 实时计算 · 精准透明
+        {isCif
+          ? '专业汽车出口CIF报价 · 含海运与保险 · 实时计算 · 精准透明'
+          : '专业汽车出口FOB报价 · 实时计算 · 精准透明'}
       </Typography>
     </Box>
   );

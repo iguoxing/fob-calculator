@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   Box,
   Grid,
@@ -12,31 +12,58 @@ import {
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import InputField from './InputField';
-import { calculate, formatNumber, DEFAULT_VALUES } from '../utils/calculator';
+import {
+  calculate,
+  calculateCIF,
+  formatNumber,
+  DEFAULT_VALUES,
+} from '../utils/calculator';
 
 /**
  * 主计算器组件
- * 右侧计算结果已隐藏，仅展示输入区域和最终FOB报价
+ * 支持 FOB / CIF 两种报价模式切换，右侧计算结果已隐藏，仅展示输入区域和最终报价
+ * @param {object} props
+ * @param {'fob'|'cif'} props.mode - 当前报价模式
+ * @param {function} props.onModeChange - 切换报价模式
  */
-function Calculator() {
+function Calculator({ mode = 'fob', onModeChange }) {
   const [inputs, setInputs] = useState({ ...DEFAULT_VALUES });
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
 
+  // 同步浏览器标签页标题
+  useEffect(() => {
+    document.title = `${mode === 'cif' ? 'CIF' : 'FOB'}报价计算器 - 中道之星 ZDSTAR Auto`;
+  }, [mode]);
+
+  /** 更新单个输入值 */
   const handleInputChange = useCallback((field, value) => {
     setInputs((prev) => ({ ...prev, [field]: value }));
   }, []);
 
+  /** 计算结果（实时） */
   const results = useMemo(() => calculate(inputs), [inputs]);
 
+  /** CIF附加结果（仅CIF模式需要） */
+  const cifResults = useMemo(
+    () => (mode === 'cif' ? calculateCIF(inputs, results.fobPrice) : null),
+    [mode, inputs, results.fobPrice]
+  );
+
+  /** 当前模式最终报价 */
+  const finalPrice = mode === 'cif' ? cifResults.cifPrice : results.fobPrice;
+
+  /** 重置为默认值 */
   const handleReset = useCallback(() => {
     setInputs({ ...DEFAULT_VALUES });
     setSnackbarMsg('已重置为默认值');
     setSnackbarOpen(true);
   }, []);
 
-  const handleCopyFOB = useCallback(() => {
-    const text = `$${formatNumber(results.fobPrice)}`;
+  /** 复制最终报价 */
+  const handleCopyQuote = useCallback(() => {
+    const prefix = mode === 'cif' ? 'CIF' : 'FOB';
+    const text = `${prefix} $${formatNumber(finalPrice)}`;
     navigator.clipboard
       .writeText(text)
       .then(() => {
@@ -53,11 +80,13 @@ function Calculator() {
         setSnackbarMsg(`已复制：${text}`);
         setSnackbarOpen(true);
       });
-  }, [results.fobPrice]);
+  }, [mode, finalPrice]);
 
   const handleCloseSnackbar = useCallback(() => {
     setSnackbarOpen(false);
   }, []);
+
+  const isCif = mode === 'cif';
 
   return (
     <Box sx={{ width: '100%', maxWidth: 560, mx: 'auto' }}>
@@ -70,8 +99,87 @@ function Calculator() {
           backdropFilter: 'blur(20px)',
         }}
       >
+        {/* 报价模式切换 */}
+        <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, pt: { xs: 2, sm: 3, md: 4 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              p: 0.5,
+              bgcolor: '#eef0fa',
+              borderRadius: 3,
+              mb: 3,
+            }}
+          >
+            <Button
+              fullWidth
+              disableRipple
+              onClick={() => onModeChange('fob')}
+              sx={{
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                color: isCif ? '#5a6572' : '#fff',
+                bgcolor: isCif ? 'transparent' : '#1a237e',
+                boxShadow: isCif ? 'none' : '0 2px 8px rgba(26, 35, 126, 0.25)',
+                '&:hover': {
+                  bgcolor: isCif ? '#e2e6f5' : '#283593',
+                },
+              }}
+            >
+              FOB 报价
+              <Typography
+                component="span"
+                sx={{
+                  ml: 0.5,
+                  fontSize: '0.7rem',
+                  fontWeight: 400,
+                  opacity: 0.75,
+                  display: { xs: 'none', sm: 'inline' },
+                }}
+              >
+                国内港口
+              </Typography>
+            </Button>
+            <Button
+              fullWidth
+              disableRipple
+              onClick={() => onModeChange('cif')}
+              sx={{
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                color: isCif ? '#fff' : '#5a6572',
+                bgcolor: isCif ? '#1b5e57' : 'transparent',
+                boxShadow: isCif ? '0 2px 8px rgba(27, 94, 87, 0.25)' : 'none',
+                '&:hover': {
+                  bgcolor: isCif ? '#246b63' : '#e2e6f5',
+                },
+              }}
+            >
+              CIF 报价
+              <Typography
+                component="span"
+                sx={{
+                  ml: 0.5,
+                  fontSize: '0.7rem',
+                  fontWeight: 400,
+                  opacity: 0.75,
+                  display: { xs: 'none', sm: 'inline' },
+                }}
+              >
+                含海运保险
+              </Typography>
+            </Button>
+          </Box>
+        </Box>
+
         {/* 主体内容区域 */}
-        <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+        <Box sx={{ p: { xs: 2, sm: 3, md: 4 }, pt: { xs: 0, sm: 0, md: 0 } }}>
           <Grid container>
             {/* 输入区域（占满全宽） */}
             <Grid item xs={12}>
@@ -157,6 +265,43 @@ function Calculator() {
                 placeholder="6.75"
               />
 
+              {/* CIF 模式附加参数 */}
+              {isCif && (
+                <>
+                  <Divider sx={{ my: 1.5 }} />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: 'block',
+                      color: '#1b5e57',
+                      fontWeight: 700,
+                      mb: 1,
+                      fontSize: '0.8rem',
+                    }}
+                  >
+                    海运与保险（CIF 附加）
+                  </Typography>
+
+                  <InputField
+                    label="海运费（单台）"
+                    tooltip="起运港到目的港的海运费，按单台均摊（美元）"
+                    value={inputs.oceanFreight}
+                    onChange={(v) => handleInputChange('oceanFreight', v)}
+                    prefix="$"
+                    placeholder="1,300.00"
+                  />
+
+                  <InputField
+                    label="保险费率（%）"
+                    tooltip="按 CIF×110% 加成投保；费率0.4即0.4%"
+                    value={inputs.insuranceRate}
+                    onChange={(v) => handleInputChange('insuranceRate', v)}
+                    prefix=""
+                    placeholder="0.4"
+                  />
+                </>
+              )}
+
               {/* 操作按钮 */}
               <Box sx={{ display: 'flex', gap: 1.5, mt: 2 }}>
                 <Button
@@ -182,10 +327,12 @@ function Calculator() {
           </Grid>
         </Box>
 
-        {/* 最终FOB报价 - 突出展示 */}
+        {/* 最终报价 - 突出展示 */}
         <Box
           sx={{
-            background: 'linear-gradient(135deg, #1a237e 0%, #283593 60%, #1a237e 100%)',
+            background: isCif
+              ? 'linear-gradient(135deg, #0f3d38 0%, #1b5e57 60%, #0f3d38 100%)'
+              : 'linear-gradient(135deg, #1a237e 0%, #283593 60%, #1a237e 100%)',
             px: { xs: 3, sm: 4, md: 5 },
             py: { xs: 2.5, sm: 3 },
             position: 'relative',
@@ -223,7 +370,7 @@ function Calculator() {
                   letterSpacing: '0.05em',
                 }}
               >
-                最终报价 · FOB国内港口价
+                {isCif ? '最终报价 · CIF目的港到岸价' : '最终报价 · FOB国内港口价'}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
                 <Typography
@@ -235,7 +382,7 @@ function Calculator() {
                     lineHeight: 1.2,
                   }}
                 >
-                  ${formatNumber(results.fobPrice)}
+                  ${formatNumber(finalPrice)}
                 </Typography>
                 <Typography
                   variant="body2"
@@ -247,11 +394,26 @@ function Calculator() {
                   USD
                 </Typography>
               </Box>
+              {isCif && cifResults && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: 'rgba(255, 255, 255, 0.55)',
+                    fontSize: { xs: '0.7rem', sm: '0.78rem' },
+                    mt: 0.5,
+                    display: 'block',
+                  }}
+                >
+                  FOB ${formatNumber(results.fobPrice)} + 海运费 $
+                  {formatNumber(cifResults.freight)} + 保险费 $
+                  {formatNumber(cifResults.insurance)}
+                </Typography>
+              )}
             </Box>
             <Button
               variant="contained"
               startIcon={<ContentCopyIcon />}
-              onClick={handleCopyFOB}
+              onClick={handleCopyQuote}
               sx={{
                 bgcolor: '#ff9800',
                 color: '#fff',
