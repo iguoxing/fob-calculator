@@ -1,67 +1,63 @@
 /**
- * FOB报价计算器 - 计算逻辑模块
- * 中道之星 ZDSTAR Auto
+ * FOB / CIF 汽车出口报价逻辑。
+ * 与 FOB汽车出口价格计算器_新图片验证版.xlsx 口径一致。
+ * 提醒：退税按含税价拆分仅为估算，实际退税须依法核实。
  */
-
-/** 默认输入值 */
-export const DEFAULT_VALUES = {
-  guidePrice: 222800,
-  discount: 49000,
-  logistics: 1100,
-  profit: 600,
-  portCharge: 400,
-  exchangeRate: 6.75,
+export const DEFAULT_VALUES = Object.freeze({
+  guidePrice: 149800,
+  discount: 38000,
+  vatRate: 13,
+  modificationFee: 6090,
+  logistics: 8300,
+  profit: 200,
+  portCharge: 44.4,
+  exchangeRate: 6.72,
   oceanFreight: 1300,
   insuranceRate: 0.4,
-};
+});
 
-/** 增值税率 */
-const VAT_RATE = 0.13;
+export const EXAMPLES = Object.freeze({
+  latest: Object.freeze({ ...DEFAULT_VALUES }),
+  original: Object.freeze({
+    ...DEFAULT_VALUES,
+    guidePrice: 159800,
+    discount: 48000,
+    modificationFee: 7208,
+  }),
+});
 
-/** 消费税率 */
-const CONSUMPTION_TAX_RATE = 0.05;
+const round2 = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-/** 改装基础费 */
-const MODIFICATION_BASE_FEE = 500;
-
-/** CIF 保险加成率（国际惯例按 CIF 价加成 110% 投保） */
-const INSURANCE_LOADING = 1.1;
+function requireNonnegative(name, value) {
+  if (value === '' || value == null || !Number.isFinite(Number(value)) || Number(value) < 0) {
+    throw new Error(name + '必须为非负数字');
+  }
+  return Number(value);
+}
 
 /**
- * 执行FOB报价全链路计算
- * @param {object} inputs - 用户输入值
- * @param {number} inputs.guidePrice - 主机厂指导价（￥）
- * @param {number} inputs.discount - 优惠价（￥）
- * @param {number} inputs.logistics - 首段物流+二段物流+刷机（￥）
- * @param {number} inputs.profit - 利润（$）
- * @param {number} inputs.portCharge - 港杂+装箱（$）
- * @param {number} inputs.exchangeRate - 美元汇率
- * @returns {object} 计算结果
+ * 输入为单台车辆报价参数，返回所有 Excel 计算中间项。
+ * 修改费是人工录入的含税费总额，不在此重复乘以 5% / 6% 或再加 500。
  */
 export function calculate(inputs) {
-  const {
-    guidePrice,
-    discount,
-    logistics,
-    profit,
-    portCharge,
-    exchangeRate,
-  } = inputs;
+  const guidePrice = requireNonnegative('指导价', inputs.guidePrice);
+  const discount = requireNonnegative('优惠金额', inputs.discount);
+  const vatRate = requireNonnegative('示例税率', inputs.vatRate);
+  const modificationFee = requireNonnegative('改装费', inputs.modificationFee);
+  const logistics = requireNonnegative('物流刷机费', inputs.logistics);
+  const profit = requireNonnegative('美元利润', inputs.profit);
+  const portCharge = requireNonnegative('港杂装箱费', inputs.portCharge);
+  const exchangeRate = requireNonnegative('美元汇率', inputs.exchangeRate);
 
-  // 优惠后报价 = 指导价 - 优惠价
-  const priceAfterDiscount = guidePrice - discount;
+  if (discount > guidePrice) throw new Error('优惠金额不能高于指导价');
+  if (exchangeRate <= 0) throw new Error('美元汇率必须大于 0');
+  if (vatRate > 100) throw new Error('示例税率不能超过 100%');
 
-  // 可退税金额 = 优惠后报价 / 1.13 * 0.13
-  const taxRefund = priceAfterDiscount / (1 + VAT_RATE) * VAT_RATE;
-
-  // 不含税车辆成本 = 优惠后报价 - 可退税金额
-  const costExclTax = priceAfterDiscount - taxRefund;
-
-  // 改装费 = 优惠后报价 * 5% + 500
-  const modificationFee = priceAfterDiscount * CONSUMPTION_TAX_RATE + MODIFICATION_BASE_FEE;
-
-  // 最终报价($FOB) = (不含税车辆成本 + 改装费 + 物流) / 汇率 + 利润 + 港杂
-  const totalCostCNY = costExclTax + modificationFee + logistics;
+  const priceAfterDiscount = round2(guidePrice - discount);
+  // Excel: ROUND((优惠后报价 / (1 + 税率)) × 税率, 2)
+  const taxRefund = round2(priceAfterDiscount / (1 + vatRate / 100) * (vatRate / 100));
+  const costExclTax = round2(priceAfterDiscount - taxRefund);
+  const totalCostCNY = round2(costExclTax + modificationFee + logistics);
   const totalCostUSD = totalCostCNY / exchangeRate;
   const fobPrice = totalCostUSD + profit + portCharge;
 
@@ -73,61 +69,37 @@ export function calculate(inputs) {
     totalCostCNY,
     totalCostUSD,
     fobPrice,
+    fobPriceRounded: Math.round(fobPrice),
   };
 }
 
 /**
- * 在FOB基础上计算CIF报价
- * CIF = FOB + 海运费 + 保险费
- * 保险费 = CIF × 110% × 保险费率（需反解）
- * => CIF = (FOB + 海运费) / (1 - 1.1 × 费率)
- * @param {object} inputs - 用户输入值
- * @param {number} inputs.oceanFreight - 海运费（$/台，起运港→目的港）
- * @param {number} inputs.insuranceRate - 保险费率（%，默认0.4）
- * @param {number} fobPrice - 已计算出的FOB报价（$）
- * @returns {object} CIF计算结果
+ * 保险按 CIF × 110% × 保险费率计价，CIF 需反解。
+ * insuranceRate 输入百分数，如 0.4 表示 0.4%。
  */
 export function calculateCIF(inputs, fobPrice) {
-  const freight = inputs.oceanFreight ?? 0;
-  const rate = (inputs.insuranceRate ?? 0.4) / 100;
-
-  const denominator = 1 - INSURANCE_LOADING * rate;
-  const base = fobPrice + freight;
-  const insurance =
-    denominator > 0 ? (base * INSURANCE_LOADING * rate) / denominator : 0;
-  const cifPrice = base + insurance;
-
+  const freight = requireNonnegative('国际海运费', inputs.oceanFreight);
+  const insuranceRate = requireNonnegative('保险费率', inputs.insuranceRate);
+  const denominator = 1 - 1.1 * insuranceRate / 100;
+  if (denominator <= 0) throw new Error('保险费率过高，无法计算 CIF');
+  const cifPrice = (fobPrice + freight) / denominator;
   return {
     freight,
-    insurance,
+    insurance: cifPrice - fobPrice - freight,
     cifPrice,
+    cifPriceRounded: Math.round(cifPrice),
   };
 }
 
-/**
- * 格式化数字为千分位字符串
- * @param {number} value - 数值
- * @param {number} decimals - 小数位数，默认2
- * @returns {string} 千分位格式字符串
- */
 export function formatNumber(value, decimals = 2) {
-  if (value === null || value === undefined || isNaN(value)) {
-    return '0.00';
-  }
+  if (!Number.isFinite(value)) return '—';
   return value.toLocaleString('zh-CN', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
 }
 
-/**
- * 解析千分位格式字符串为数字
- * @param {string} str - 千分位格式字符串
- * @returns {number} 数值
- */
-export function parseFormattedNumber(str) {
-  if (!str) return 0;
-  const cleaned = String(str).replace(/,/g, '');
-  const num = parseFloat(cleaned);
-  return isNaN(num) ? 0 : num;
+export function parseFormattedNumber(value) {
+  const parsed = parseFloat(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
